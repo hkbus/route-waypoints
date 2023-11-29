@@ -37,4 +37,5 @@ HK Bus Crawling@2021, https://github.com/hkbus/route-waypoints
 `
 
 ## Contributors
-[ChunLaw](http://github.com/chunlaw/)
+[ChunLaw](https://github.com/chunlaw/)
+[chakflying](https://github.com/chakflying) 
