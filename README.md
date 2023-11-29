@@ -1,4 +1,4 @@
-# HK Bus WayPoints Crawling (a.k.a. hk-bus-eta)
+# HK Bus WayPoints Crawling
 
 ![Data fetching status](https://github.com/hkbus/route-waypoints/actions/workflows/crawl.yml/badge.svg) 
 
