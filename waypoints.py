@@ -4,11 +4,16 @@ import re
 import os
 import zipfile
 import io
+import glob
+import shutil
 from pyproj import Transformer
+
+r = requests.get("https://portal.csdi.gov.hk/geoportal/rest/metadata/item/td_rcd_1638844988873_41214")
+src_id = json.loads(r.content)['_source']['fileid'].replace('-', '')
 
 epsgTransformer = Transformer.from_crs('epsg:2326', 'epsg:4326')
 
-r = requests.get("https://static.csdi.gov.hk/csdi-webpage/download/common/51bbe0d88d421c1e94572e503ad0428fabe11e3300c40e221146550044e54de5")
+r = requests.get("https://static.csdi.gov.hk/csdi-webpage/download/"+src_id+"/geojson")
 z = zipfile.ZipFile(io.BytesIO(r.content))
 with z.open("FB_ROUTE_LINE.json") as f:
   data = json.loads(f.read().decode("utf-8"))
@@ -25,6 +30,8 @@ for i, feature in enumerate(data["features"]):
         data["features"][i]["geometry"]["coordinates"][j] = [lng, lat]
 
 os.makedirs("waypoints", exist_ok=True)
+for file in glob.glob(r'./mtr/*.json'):
+  shutil.copy(file, "waypoints")
 
 for feature in data["features"]:
   properties = feature["properties"]
@@ -42,3 +49,4 @@ for feature in data["features"]:
         )
       )
     ) 
+
