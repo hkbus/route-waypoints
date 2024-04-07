@@ -32,6 +32,10 @@ for i, feature in enumerate(data["features"]):
 os.makedirs("waypoints", exist_ok=True)
 for file in glob.glob(r'./mtr/*.json'):
   shutil.copy(file, "waypoints")
+for file in glob.glob(r'./lrt/*.json'):
+  shutil.copy(file, "waypoints")
+for file in glob.glob(r'./ferry/*.json'):
+  shutil.copy(file, "waypoints")
 
 for feature in data["features"]:
   properties = feature["properties"]
