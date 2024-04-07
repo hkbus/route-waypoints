@@ -6,7 +6,11 @@ This project is to fetch the waypoints from [CSDI](https://portal.csdi.gov.hk/ge
 
 During the crawling, it will minified the result by truncating to 5 decimal places, (i.e., ±1m), and minified the json by cleaning useless space characters. Also, as the data is provided statically by `gh-pages`, the data transfer supports `Content-Encoding: gzip` for largely preserving your bandwidth.
 
-Links are in format: https://hkbus.github.io/route-waypoints/{GTFS_ID}-{[O|I]}.json
+Links are in format:
+- MTR: https://hkbus.github.io/route-waypoints/{LINE_CODE}.json
+- LRT: https://hkbus.github.io/route-waypoints/{LINE_NUMBER}-{[O|I]}.json
+- Ferry: https://hkbus.github.io/route-waypoints/{ROUTE_ID}.json
+- Everything else: https://hkbus.github.io/route-waypoints/{GTFS_ID}-{[O|I]}.json
 
 Example link: (https://hkbus.github.io/route-waypoints/1001-O.json)
 
