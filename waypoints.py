@@ -7,6 +7,8 @@ import io
 import glob
 import shutil
 import geopandas
+# noinspection PyUnresolvedReferences
+import pyogrio
 from pyproj import Transformer
 from tempfile import TemporaryDirectory
 
@@ -17,12 +19,12 @@ epsgTransformer = Transformer.from_crs('epsg:2326', 'epsg:4326')
 
 r = requests.get("https://static.csdi.gov.hk/csdi-webpage/download/"+src_id+"/fgdb")
 z = zipfile.ZipFile(io.BytesIO(r.content))
-gdb_name = next(s for s in z.namelist() if s.startswith("FB_ROUTE"))
+gdb_name = next(s[0:s.index('/')] for s in z.namelist() if s.startswith("FB_ROUTE"))
 
 with TemporaryDirectory() as tmpdir:
   z.extractall(tmpdir)
   gdb_path = os.path.join(tmpdir, gdb_name)
-  gdf = geopandas.read_file(gdb_path, encoding='utf-8')
+  gdf = geopandas.read_file(gdb_path, encoding='utf-8', engine="pyogrio")
   geojson_path = os.path.join(tmpdir, "data.geojson")
   gdf.to_file(geojson_path, driver='GeoJSON', encoding='utf-8')
   with open(geojson_path, encoding='utf-8') as f:
