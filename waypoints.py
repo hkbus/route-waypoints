@@ -48,10 +48,7 @@ for csdi_dataset_id in [
         logging.info("Reading data (1)")
         gdf = geopandas.read_file(gdb_path, encoding='utf-8', engine="pyogrio")
         logging.info("Reading data (2)")
-        geojson_path = os.path.join(tmpdir, "data.geojson")
-        gdf.to_file(geojson_path, driver='GeoJSON', encoding='utf-8')
-        with open(geojson_path, encoding='utf-8') as f:
-            data = json.load(f)
+        data = json.loads(gdf.to_json(drop_id=True))
 
     logging.info("Transforming data")
     for i, feature in enumerate(data["features"]):
