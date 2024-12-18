@@ -1,0 +1,21 @@
+name: autopep8
+
+on: [push]
+
+jobs:
+  autopep8:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: autopep8
+        id: autopep8
+        uses: peter-evans/autopep8@v2
+        with:
+          args: --exit-code --recursive --in-place --aggressive --aggressive .
+      - name: Commit autopep8 changes
+        if: steps.autopep8.outputs.exit-code == 2
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Automated autopep8 fixes"
+          git push
