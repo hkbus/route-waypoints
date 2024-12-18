@@ -11,6 +11,9 @@ import geopandas
 import pyogrio
 from pyproj import Transformer
 from tempfile import TemporaryDirectory
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 os.makedirs("waypoints", exist_ok=True)
 
@@ -22,6 +25,8 @@ for csdi_dataset_id in [
     # https://portal.csdi.gov.hk/geoportal/?lang=zh-hk&datasetId=td_rcd_1697082463580_57453
     "td_rcd_1697082463580_57453"
 ]:
+    logging.info("csdi_dataset_id=" + csdi_dataset_id)
+    logging.info("Fetching metadata")
     r = requests.get(
         "https://portal.csdi.gov.hk/geoportal/rest/metadata/item/" +
         csdi_dataset_id)
@@ -29,6 +34,7 @@ for csdi_dataset_id in [
 
     epsgTransformer = Transformer.from_crs('epsg:2326', 'epsg:4326')
 
+    logging.info("Fetching FGDB")
     r = requests.get(
         "https://static.csdi.gov.hk/csdi-webpage/download/" + src_id + "/fgdb")
     z = zipfile.ZipFile(io.BytesIO(r.content))
@@ -36,14 +42,18 @@ for csdi_dataset_id in [
                     for s in z.namelist() if s != "__MACOSX")
 
     with TemporaryDirectory() as tmpdir:
+        logging.info("Extracting data")
         z.extractall(tmpdir)
         gdb_path = os.path.join(tmpdir, gdb_name)
+        logging.info("Reading data (1)")
         gdf = geopandas.read_file(gdb_path, encoding='utf-8', engine="pyogrio")
+        logging.info("Reading data (2)")
         geojson_path = os.path.join(tmpdir, "data.geojson")
         gdf.to_file(geojson_path, driver='GeoJSON', encoding='utf-8')
         with open(geojson_path, encoding='utf-8') as f:
             data = json.load(f)
 
+    logging.info("Transforming data")
     for i, feature in enumerate(data["features"]):
         if feature["geometry"]["type"] == "MultiLineString":
             for j, coordinates in enumerate(
@@ -59,6 +69,7 @@ for csdi_dataset_id in [
                     coordinate[1], coordinate[0])
                 data["features"][i]["geometry"]["coordinates"][j] = [lng, lat]
 
+    logging.info("Storing data")
     for feature in data["features"]:
         properties = feature["properties"]
         with open("waypoints/" + str(properties["ROUTE_ID"]) + "-" + ("O" if properties["ROUTE_SEQ"] == 1 else "I") + ".json", "w", encoding='utf-8') as f:
@@ -77,6 +88,7 @@ for csdi_dataset_id in [
             )
 
 
+logging.info("Copying static data")
 for file in glob.glob(r'./mtr/*.json'):
     shutil.copy(file, "waypoints")
 for file in glob.glob(r'./lrt/*.json'):
