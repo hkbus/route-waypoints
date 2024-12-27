@@ -1,3 +1,5 @@
+import datetime
+from zoneinfo import ZoneInfo
 import requests
 import json
 import re
@@ -15,21 +17,36 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
+
+def store_version(key: str, version: str):
+    logging.info(f"{key} version: {version}")
+    # "0" is prepended in filename so that this file appears first in Github directory listing
+    try:
+        with open('waypoints/0versions.json', 'r') as f:
+            version_dict = json.load(f)
+    except BaseException:
+        version_dict = {}
+    version_dict[key] = version
+    version_dict = dict(sorted(version_dict.items()))
+    with open('waypoints/0versions.json', 'w', encoding='UTF-8') as f:
+        json.dump(version_dict, f, indent=4)
+
+
 os.makedirs("waypoints", exist_ok=True)
 
-for csdi_dataset_id in [
+for csdi_dataset in [
     # 巴士路線
     # https://portal.csdi.gov.hk/geoportal/?lang=zh-hk&datasetId=td_rcd_1638844988873_41214
-    "td_rcd_1638844988873_41214",
+    {"name": "bus", "id": "td_rcd_1638844988873_41214"},
     # 專線小巴路線
     # https://portal.csdi.gov.hk/geoportal/?lang=zh-hk&datasetId=td_rcd_1697082463580_57453
-    "td_rcd_1697082463580_57453"
+    {"name": "gmb", "id": "td_rcd_1697082463580_57453"}
 ]:
-    logging.info("csdi_dataset_id=" + csdi_dataset_id)
+    logging.info("csdi_dataset=" + json.dumps(csdi_dataset))
     logging.info("Fetching metadata")
     r = requests.get(
         "https://portal.csdi.gov.hk/geoportal/rest/metadata/item/" +
-        csdi_dataset_id)
+        csdi_dataset["id"])
     src_id = json.loads(r.content)['_source']['fileid'].replace('-', '')
 
     epsgTransformer = Transformer.from_crs('epsg:2326', 'epsg:4326')
@@ -38,6 +55,10 @@ for csdi_dataset_id in [
     r = requests.get(
         "https://static.csdi.gov.hk/csdi-webpage/download/" + src_id + "/fgdb")
     z = zipfile.ZipFile(io.BytesIO(r.content))
+    version = min([f.date_time for f in z.infolist()])
+    version = datetime.datetime(
+        *version, tzinfo=ZoneInfo("Asia/Hong_Kong"))
+    store_version(csdi_dataset["name"], version.isoformat())
     gdb_name = next(s[0:s.index('/')]
                     for s in z.namelist() if s != "__MACOSX")
 
