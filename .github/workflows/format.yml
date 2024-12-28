@@ -1,13 +1,13 @@
-name: autopep8
+name: Format
 
 on: [push]
 
 jobs:
-  autopep8:
+  format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: autopep8
+      - name: Format code
         id: autopep8
         uses: peter-evans/autopep8@v2
         with:
@@ -15,7 +15,8 @@ jobs:
       - name: Commit autopep8 changes
         if: steps.autopep8.outputs.exit-code == 2
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "Automated autopep8 fixes"
+          # copied from https://github.com/creyD/prettier_action/blob/9561a3f1e164fa28b6f4da59c1807e1cd1af7cf5/entrypoint.sh#L131
+          git config user.name "GitHub Action"
+          git config user.email "actions@github.com"
+          git commit -am "Formatted Code!" --author="$GITHUB_ACTOR <${{ github.actor }}@users.noreply.github.com>" || echo "No files added to commit"
           git push
