@@ -9,8 +9,6 @@ import io
 import glob
 import shutil
 import geopandas
-# noinspection PyUnresolvedReferences
-import pyogrio
 from pyproj import Transformer
 from tempfile import TemporaryDirectory
 import logging
@@ -67,7 +65,7 @@ for csdi_dataset in [
         z.extractall(tmpdir)
         gdb_path = os.path.join(tmpdir, gdb_name)
         logging.info("Reading data (1)")
-        gdf = geopandas.read_file(gdb_path, encoding='utf-8', engine="pyogrio")
+        gdf = geopandas.read_file(gdb_path, encoding='utf-8')
         logging.info("Reading data (2)")
         data = json.loads(gdf.to_json(drop_id=True))
 
