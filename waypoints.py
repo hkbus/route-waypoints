@@ -9,9 +9,6 @@ import io
 import glob
 import shutil
 import geopandas
-# noinspection PyUnresolvedReferences
-import pyogrio
-from pyproj import Transformer
 from tempfile import TemporaryDirectory
 import logging
 
@@ -49,8 +46,6 @@ for csdi_dataset in [
         csdi_dataset["id"])
     src_id = json.loads(r.content)['_source']['fileid'].replace('-', '')
 
-    epsgTransformer = Transformer.from_crs('epsg:2326', 'epsg:4326')
-
     logging.info("Fetching FGDB")
     r = requests.get(
         "https://static.csdi.gov.hk/csdi-webpage/download/" + src_id + "/fgdb")
@@ -67,25 +62,11 @@ for csdi_dataset in [
         z.extractall(tmpdir)
         gdb_path = os.path.join(tmpdir, gdb_name)
         logging.info("Reading data (1)")
-        gdf = geopandas.read_file(gdb_path, encoding='utf-8', engine="pyogrio")
+        gdf = geopandas.read_file(gdb_path, encoding='utf-8')
+        logging.info("Transforming data")
+        gdf.to_crs(epsg=4326, inplace=True)
         logging.info("Reading data (2)")
-        data = json.loads(gdf.to_json(drop_id=True))
-
-    logging.info("Transforming data")
-    for i, feature in enumerate(data["features"]):
-        if feature["geometry"]["type"] == "MultiLineString":
-            for j, coordinates in enumerate(
-                    feature["geometry"]["coordinates"]):
-                for k, coordinate in enumerate(coordinates):
-                    lat, lng = epsgTransformer.transform(
-                        coordinate[1], coordinate[0])
-                    data["features"][i]["geometry"]["coordinates"][j][k] = [
-                        lng, lat]
-        else:
-            for j, coordinate in enumerate(feature["geometry"]["coordinates"]):
-                lat, lng = epsgTransformer.transform(
-                    coordinate[1], coordinate[0])
-                data["features"][i]["geometry"]["coordinates"][j] = [lng, lat]
+        data = gdf.to_geo_dict(drop_id=True)
 
     logging.info("Storing data")
     for feature in data["features"]:
