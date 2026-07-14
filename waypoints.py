@@ -130,117 +130,98 @@ def fetch_ctb_route_directions() -> dict:
     return directions
 
 
-def determine_direction(
-    properties: dict,
+def _route_directions(
+    route_name: str,
+    company: str,
     kmb_directions: dict,
     ctb_directions: dict,
-) -> str:
-    """Determine the correct O/I direction label for a CSDI route feature.
-
-    Cross-references the operator's API to determine whether the CSDI
-    feature represents the outbound (O) or inbound (I) direction.
-
-    Falls back to ROUTE_SEQ-based labeling if the direction cannot be determined.
-    """
-    route_name = properties.get("ROUTE_NAMEE", "")
-    company = properties.get("COMPANY_CODE", "")
-    st_stop = properties.get("ST_STOP_NAMEE", "")
-    ed_stop = properties.get("ED_STOP_NAMEE", "")
-    route_seq = properties.get("ROUTE_SEQ", 1)
-
-    # Default: original behavior (ROUTE_SEQ=1 -> O, else I)
-    fallback = "O" if route_seq == 1 else "I"
-
-    # KMB and LWB routes: use KMB API
+):
+    """Return (o_orig, o_dest, i_orig, i_dest) for a route, or None if unknown."""
     if company in ("KMB", "LWB") and route_name in kmb_directions:
         dirs = kmb_directions[route_name]
         outbound = dirs.get("O", {})
         inbound = dirs.get("I", {})
-
-        o_orig = outbound.get("orig", "")
-        o_dest = outbound.get("dest", "")
-        i_orig = inbound.get("orig", "")
-        i_dest = inbound.get("dest", "")
-
-        # Check if CSDI's start stop matches outbound origin
-        # and end stop matches outbound destination
-        o_start_match = name_matches(st_stop, o_orig)
-        o_end_match = name_matches(ed_stop, o_dest)
-        i_start_match = name_matches(st_stop, i_orig)
-        i_end_match = name_matches(ed_stop, i_dest)
-
-        if o_start_match and o_end_match:
-            result = "O"
-        elif i_start_match and i_end_match:
-            result = "I"
-        elif o_start_match and not i_start_match:
-            result = "O"
-        elif i_start_match and not o_start_match:
-            result = "I"
-        elif o_end_match and not i_end_match:
-            result = "O"
-        elif i_end_match and not o_end_match:
-            result = "I"
-        else:
-            # Can't determine - fall back
-            result = fallback
-            logging.debug(
-                f"Could not determine direction for {route_name} "
-                f"(ROUTE_ID={properties.get('ROUTE_ID')}, SEQ={route_seq}), "
-                f"using fallback {fallback}"
-            )
-            return fallback
-
-        if result != fallback:
-            logging.info(
-                f"Corrected direction for {route_name} "
-                f"(ROUTE_ID={properties.get('ROUTE_ID')}, COMPANY={company}): "
-                f"ROUTE_SEQ={route_seq} was {fallback}, now {result} "
-                f"(ST={st_stop[:30]}, ED={ed_stop[:30]}, "
-                f"KMB O: {o_orig[:20]} -> {o_dest[:20]}, "
-                f"KMB I: {i_orig[:20]} -> {i_dest[:20]})"
-            )
-        return result
-
-    # CTB routes: use CTB API
+        if outbound or inbound:
+            return (outbound.get("orig", ""), outbound.get("dest", ""),
+                    inbound.get("orig", ""), inbound.get("dest", ""))
     if company == "CTB" and route_name in ctb_directions:
         dirs = ctb_directions[route_name]
-        o_orig = dirs.get("orig", "")
-        o_dest = dirs.get("dest", "")
+        # CTB's route list only carries the outbound leg; the inbound leg is
+        # its reverse (origin/destination swapped).
+        return (dirs.get("orig", ""), dirs.get("dest", ""),
+                dirs.get("dest", ""), dirs.get("orig", ""))
+    return None
 
-        # CTB route list shows outbound direction (orig=origin, dest=destination)
-        # If CSDI's start matches CTB's origin -> outbound
-        # If CSDI's start matches CTB's destination -> inbound (return)
-        o_start_match = name_matches(st_stop, o_orig)
-        i_start_match = name_matches(st_stop, o_dest)
 
-        if o_start_match and not i_start_match:
-            result = "O"
-        elif i_start_match and not o_start_match:
-            result = "I"
-        else:
-            # Try end stop
-            o_end_match = name_matches(ed_stop, o_dest)
-            i_end_match = name_matches(ed_stop, o_orig)
-            if o_end_match and not i_end_match:
-                result = "O"
-            elif i_end_match and not o_end_match:
-                result = "I"
-            else:
-                return fallback
+def _direction_score(properties: dict, orig: str, dest: str) -> int:
+    """Score 0-2 for how well a feature's start/end match a given orig/dest."""
+    score = 0
+    if orig and name_matches(properties.get("ST_STOP_NAMEE", ""), orig):
+        score += 1
+    if dest and name_matches(properties.get("ED_STOP_NAMEE", ""), dest):
+        score += 1
+    return score
 
-        if result != fallback:
-            logging.info(
-                f"Corrected direction for {route_name} "
-                f"(ROUTE_ID={properties.get('ROUTE_ID')}, COMPANY=CTB): "
-                f"ROUTE_SEQ={route_seq} was {fallback}, now {result} "
-                f"(ST={st_stop[:30]}, ED={ed_stop[:30]}, "
-                f"CTB outbound: {o_orig[:20]} -> {o_dest[:20]})"
-            )
-        return result
 
-    # GMB and other companies: fall back to ROUTE_SEQ
-    return fallback
+def assign_directions(
+    features: list,
+    kmb_directions: dict,
+    ctb_directions: dict,
+) -> list:
+    """Assign an O/I label to every feature of a single route, together.
+
+    The operators' outbound/inbound convention is not tracked by CSDI's
+    ROUTE_SEQ, so labelling by ROUTE_SEQ alone swaps some routes (issue #14).
+    This resolves a route's features *jointly* against the operator API:
+
+    * a two-direction route always gets exactly one O and one I -- the pair
+      is placed in whichever orientation best matches the operator's real
+      origin/destination, so it can never stamp both features the same label
+      and overwrite one direction's file;
+    * a single-direction route is labelled by whichever direction it matches.
+
+    Falls back to the original ROUTE_SEQ behaviour whenever the operator data
+    is unavailable or can't disambiguate, so no route regresses below status quo.
+    """
+    def seq_label(feature: dict) -> str:
+        return "O" if feature["properties"].get("ROUTE_SEQ", 1) == 1 else "I"
+
+    if not features:
+        return []
+
+    props0 = features[0]["properties"]
+    dirs = _route_directions(
+        props0.get("ROUTE_NAMEE", ""), props0.get("COMPANY_CODE", ""),
+        kmb_directions, ctb_directions)
+
+    # GMB / unknown route / API down: keep the original behaviour verbatim.
+    if dirs is None:
+        return [seq_label(f) for f in features]
+    o_orig, o_dest, i_orig, i_dest = dirs
+
+    if len(features) == 1:
+        props = features[0]["properties"]
+        so = _direction_score(props, o_orig, o_dest)
+        si = _direction_score(props, i_orig, i_dest)
+        if so != si:
+            return ["O" if so > si else "I"]
+        return [seq_label(features[0])]
+
+    if len(features) == 2:
+        a, b = features
+        keep = (_direction_score(a["properties"], o_orig, o_dest)
+                + _direction_score(b["properties"], i_orig, i_dest))
+        swap = (_direction_score(a["properties"], i_orig, i_dest)
+                + _direction_score(b["properties"], o_orig, o_dest))
+        if keep != swap:
+            return ["O", "I"] if keep > swap else ["I", "O"]
+        # Tie: fall back to ROUTE_SEQ, but keep the pair complementary so
+        # neither file overwrites the other.
+        first = seq_label(a)
+        return [first, "I" if first == "O" else "O"]
+
+    # More than two features for one route is unexpected; keep it safe.
+    return [seq_label(f) for f in features]
 
 
 os.makedirs("waypoints", exist_ok=True)
@@ -287,24 +268,29 @@ for csdi_dataset in [
         data = gdf.to_geo_dict(drop_id=True)
 
     logging.info("Storing data")
+    features_by_route = {}
     for feature in data["features"]:
-        properties = feature["properties"]
-        direction = determine_direction(
-            properties, kmb_directions, ctb_directions)
-        with open("waypoints/" + str(properties["ROUTE_ID"]) + "-" + direction + ".json", "w", encoding='utf-8') as f:
-            f.write(
-                re.sub(
-                    r"([0-9]+\.[0-9]{5})[0-9]+",
-                    r"\1",
-                    json.dumps({
-                        "features": [feature],
-                        "type": "FeatureCollection"
-                    },
-                        ensure_ascii=False,
-                        separators=(",", ":")
+        features_by_route.setdefault(
+            feature["properties"]["ROUTE_ID"], []).append(feature)
+
+    for route_id, route_features in features_by_route.items():
+        directions = assign_directions(
+            route_features, kmb_directions, ctb_directions)
+        for feature, direction in zip(route_features, directions):
+            with open("waypoints/" + str(route_id) + "-" + direction + ".json", "w", encoding='utf-8') as f:
+                f.write(
+                    re.sub(
+                        r"([0-9]+\.[0-9]{5})[0-9]+",
+                        r"\1",
+                        json.dumps({
+                            "features": [feature],
+                            "type": "FeatureCollection"
+                        },
+                            ensure_ascii=False,
+                            separators=(",", ":")
+                        )
                     )
                 )
-            )
 
 
 logging.info("Copying static data")
