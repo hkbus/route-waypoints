@@ -1,6 +1,6 @@
 # HK Bus WayPoints Crawling
 
-![Data fetching status](https://github.com/hkbus/route-waypoints/actions/workflows/crawl.yml/badge.svg) 
+![Data fetching status](https://github.com/hkbus/route-waypoints/actions/workflows/crawl.yml/badge.svg) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hkbus/route-waypoints)
 
 This project is to fetch the waypoints from [CSDI](https://portal.csdi.gov.hk/geoportal/#metadataInfoPanel). It is daily synced to the sources and launched in gh-pages.
 
