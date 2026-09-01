@@ -166,17 +166,20 @@ for csdi_dataset in [
                 feats, direction_index)):
             with open("waypoints/" + str(route_id) + "-" + direction + ".json", "w", encoding='utf-8') as f:
                 f.write(
-                    re.sub(
-                        r"([0-9]+\.[0-9]{5})[0-9]+",
-                        r"\1",
-                        json.dumps({
-                            "features": [feature],
-                            "type": "FeatureCollection"
-                        },
-                            ensure_ascii=False,
-                            separators=(",", ":")
-                        )
-                    )
+                    # collapse repeated vertices (CSDI ships sub-mm geometry)
+                    re.sub(r"(\[[-\d.,]+\])(?:,\1)+", r"\1",
+                           re.sub(
+                               r"([0-9]+\.[0-9]{5})[0-9]+",
+                               r"\1",
+                               json.dumps({
+                                   "features": [feature],
+                                   "type": "FeatureCollection"
+                               },
+                                   ensure_ascii=False,
+                                   separators=(",", ":")
+                               )
+                           )
+                           )
                 )
 
 
